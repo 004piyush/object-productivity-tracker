@@ -1,4 +1,15 @@
-*.pt
-*.csv
+# Ignore python cache files
 __pycache__/
-.vscode/
+*.pyc
+
+# Ignore the heavy dataset folders
+dataset/
+images/
+labels/
+
+# Ignore Label Studio raw database exports
+*.json
+
+# Ignore YOLO training weight outputs and logs
+runs/
+*.pt

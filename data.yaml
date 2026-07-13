@@ -1,0 +1,23 @@
+path: ./dataset      # Path relative to where you run main.py
+train: images/train  # Relative path to training images
+val: images/val      # Relative path to validation images
+
+names:
+  0: Person
+  1: Cell_Phone
+  2: Calculator
+  3: SwitchBoard
+  4: Cable
+  5: Ring
+  6: Stylus
+  7: PenTab
+  8: Cooling Pad
+  9: Dumbell
+  10: Bag
+  11: Earbuds
+  12: WhiteBox
+  13: Bottle
+  14: Teddy
+  15: Remote
+  16: Charger
+  17: Cable(White)
