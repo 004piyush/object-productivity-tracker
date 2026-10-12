@@ -1,7 +1,8 @@
 import json
 import os
+import re
 
-# 1. The exact order of your classes for your YOLO model mapping
+# 1. Exact order of classes for YOLO model mapping
 classes = [
     "Person", "Cell_Phone", "Calculator", "SwitchBoard", "Cable", "Ring",
     "Stylus", "PenTab", "Cooling Pad", "Dumbell", "Bag", "Earbuds",
@@ -9,50 +10,64 @@ classes = [
 ]
 class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-# Load your Label Studio export data
-with open("result.json", "r") as f:
+# 2. Load Label Studio export
+json_path = "result.json"
+if not os.path.exists(json_path):
+    print(f"Error: '{json_path}' not found.")
+    exit()
+
+with open(json_path, "r") as f:
     data = json.load(f)
 
-# Create output folder for the YOLO labels
-os.makedirs("labels", exist_ok=True)
+output_dir = "labels"
+os.makedirs(output_dir, exist_ok=True)
+converted_count = 0
 
+# 3. Parse tasks and convert coordinates
 for task in data:
     if not task.get("annotations"):
         continue
-        
-    image_name = os.path.basename(task["file_upload"])
-    txt_name = os.path.splitext(image_name)[0] + ".txt"
-    annotations = task["annotations"][0]["result"]
-    
-    # Group bounding box shapes with their corresponding label text by ID
-    regions = {}
-    for res in annotations:
-        reg_id = res["id"]
-        if reg_id not in regions:
-            regions[reg_id] = {"box": None, "class": None}
-            
-        if res["type"] == "rectangle":
-            regions[reg_id]["box"] = res["value"]
-        elif res["type"] == "taxonomy":
-            # Extract out the string text from the nested taxonomy format
-            if "taxonomy" in res["value"] and res["value"]["taxonomy"]:
-                regions[reg_id]["class"] = res["value"]["taxonomy"][0][0]
 
-    # Convert values to standard normalized YOLO formatting (0.0 to 1.0 range)
-    with open(os.path.join("labels", txt_name), "w") as out_f:
+    # Strip Label Studio random hash prefix (e.g. 'a1b2c3d4-img.jpg' -> 'img.jpg')
+    raw_filename = os.path.basename(task.get("file_upload", ""))
+    clean_filename = re.sub(r'^[a-f0-9]+-', '', raw_filename)
+    txt_name = os.path.splitext(clean_filename)[0] + ".txt"
+
+    # Group box coordinates with taxonomy labels by ID
+    regions = {}
+    for annotation in task["annotations"]:
+        for res in annotation.get("result", []):
+            reg_id = res.get("id")
+            if not reg_id:
+                continue
+            if reg_id not in regions:
+                regions[reg_id] = {"box": None, "class": None}
+
+            if res.get("type") == "rectangle":
+                regions[reg_id]["box"] = res.get("value")
+            elif res.get("type") == "taxonomy":
+                tax_val = res.get("value", {}).get("taxonomy", [])
+                if tax_val and len(tax_val[0]) > 0:
+                    regions[reg_id]["class"] = tax_val[0][0]
+
+    # Write normalized YOLO txt file
+    out_path = os.path.join(output_dir, txt_name)
+    with open(out_path, "w") as out_f:
         for reg_id, content in regions.items():
             box = content["box"]
             cls_name = content["class"]
-            
+
             if box and cls_name in class_to_id:
                 cls_id = class_to_id[cls_name]
-                
-                # Convert center coordinates from 0-100 percentage scale to 0-1
-                x_center = (box["x"] + box["width"] / 2) / 100.0
-                y_center = (box["y"] + box["height"] / 2) / 100.0
+
+                # Convert center coordinates from 0-100 scale to normalized 0-1 scale
+                x_center = (box["x"] + box["width"] / 2.0) / 100.0
+                y_center = (box["y"] + box["height"] / 2.0) / 100.0
                 w = box["width"] / 100.0
                 h = box["height"] / 100.0
-                
+
                 out_f.write(f"{cls_id} {x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}\n")
 
-print("Finished successfully! Check your new '/labels' folder for the YOLO data.")
+    converted_count += 1
+
+print(f"Finished successfully! Converted {converted_count} files into '/{output_dir}'.")
